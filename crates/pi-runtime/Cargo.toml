@@ -1,0 +1,36 @@
+[package]
+name = "pi-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+default-run = "pi-runtime"
+
+[features]
+test-peer = []
+
+[[bin]]
+name = "pi-runtime-test-peer"
+path = "tests/support/peer.rs"
+required-features = ["test-peer"]
+
+[dependencies]
+pi-channel-core.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+clap.workspace = true
+cron.workspace = true
+fs2.workspace = true
+libc.workspace = true
+reqwest.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+subtle.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

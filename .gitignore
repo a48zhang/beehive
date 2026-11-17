@@ -1,0 +1,9 @@
+/target/
+.env
+.env.*
+!.env.example
+*.sqlite3*
+token
+credentials.json
+/config.json
+/sessions/
