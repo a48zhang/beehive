@@ -18,6 +18,7 @@ pub struct Rpc {
     events: mpsc::Receiver<Result<Value>>,
     reader: JoinHandle<()>,
     channel: Option<String>,
+    healthy: bool,
 }
 
 impl Rpc {
@@ -102,6 +103,7 @@ impl Rpc {
             events,
             reader,
             channel: None,
+            healthy: true,
         };
         if let Err(error) =
             tokio::time::timeout(Duration::from_secs(30), rpc.request("get_state", json!({})))
@@ -113,6 +115,10 @@ impl Rpc {
             return Err(error);
         }
         Ok(rpc)
+    }
+
+    pub fn is_healthy(&self) -> bool {
+        self.healthy
     }
 
     async fn send(&mut self, record: &Value) -> Result<()> {
@@ -202,6 +208,7 @@ impl Rpc {
     }
 
     pub async fn run(&mut self, task: &Task, store: &Store) -> Result<String> {
+        self.healthy = false;
         self.select_channel(&task.channel, store).await?;
         let request_id = id();
         self.send(&json!({"type":"prompt", "id":request_id, "message":task.message}))
@@ -223,6 +230,7 @@ impl Rpc {
                         event["error"]
                     );
                     if event["data"]["disposition"] == "handled" {
+                        self.healthy = true;
                         return Ok("Prompt handled without starting an agent run.".into());
                     }
                     accepted = true;
@@ -241,6 +249,7 @@ impl Rpc {
             }
             if accepted && settled {
                 ensure!(!aborted, "Agent run aborted");
+                self.healthy = true;
                 ensure!(
                     !blocked,
                     "Agent requested interactive approval; denied in unattended mode"

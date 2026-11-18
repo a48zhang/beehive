@@ -22,7 +22,6 @@ pub struct State {
     pub notify: Notify,
     pub stop: CancellationToken,
     pub status: Mutex<Status>,
-    pub rate: Mutex<(std::time::Instant, u32)>,
 }
 
 pub async fn serve(home: PathBuf) -> Result<()> {
@@ -53,7 +52,6 @@ pub async fn serve(home: PathBuf) -> Result<()> {
         notify: Notify::new(),
         stop: CancellationToken::new(),
         status: Mutex::default(),
-        rate: Mutex::new((std::time::Instant::now(), 0)),
     });
     // Bind before starting any agent, so an occupied port fails without side effects.
     let listener =
@@ -165,7 +163,7 @@ async fn worker(state: Arc<State>) {
             }
             tracing::info!(task_id = %task.id, failed, "Task finished");
             state.status.lock().unwrap().current_task = None;
-            if failed {
+            if !rpc.as_ref().unwrap().is_healthy() {
                 state.status.lock().unwrap().pi_ready = false;
                 if let Some(mut child) = rpc.take() {
                     child.stop().await;

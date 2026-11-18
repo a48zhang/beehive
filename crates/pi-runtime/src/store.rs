@@ -183,12 +183,12 @@ impl Store {
     }
 
     pub fn delete_job(&self, id: &str) -> Result<bool> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .execute("DELETE FROM jobs WHERE id=?", [id])?
-            > 0)
+        let db = self.0.lock().unwrap();
+        let deleted = db.execute("DELETE FROM jobs WHERE id=?", [id])? > 0;
+        if deleted {
+            db.execute("DELETE FROM sessions WHERE channel=?", [format!("job:{id}")])?;
+        }
+        Ok(deleted)
     }
 
     // Claim a due occurrence and persist its successor atomically with enqueueing.
@@ -244,18 +244,15 @@ impl Store {
 
     pub fn save_session(&self, channel: &str, path: &str) -> Result<()> {
         let db = self.0.lock().unwrap();
-        let count: i64 = db.query_row("SELECT count(*) FROM sessions", [], |r| r.get(0))?;
-        ensure!(
-            count < 256
-                || db
-                    .query_row("SELECT 1 FROM sessions WHERE channel=?", [channel], |_| Ok(
-                        ()
-                    ))
-                    .optional()?
-                    .is_some(),
-            "Session limit reached (256)"
-        );
-        db.execute("INSERT INTO sessions VALUES(?,?) ON CONFLICT(channel) DO UPDATE SET path=excluded.path", params![channel,path])?;
+        db.execute("DELETE FROM sessions WHERE channel=?", [channel])?;
+        db.execute(
+            "DELETE FROM sessions WHERE rowid IN (SELECT rowid FROM sessions ORDER BY rowid DESC LIMIT -1 OFFSET 255)",
+            [],
+        )?;
+        db.execute(
+            "INSERT INTO sessions VALUES(?,?)",
+            params![channel, path],
+        )?;
         Ok(())
     }
 
@@ -314,6 +311,7 @@ mod tests {
             enabled: true,
         };
         db.add_job(&job)?;
+        db.save_session(&format!("job:{}", job.id), "/tmp/job.jsonl")?;
         let old = job.clone();
         job.next_run = Some(10);
         db.dispatch_job(&old, &job)?;
@@ -324,6 +322,8 @@ mod tests {
         db.dispatch_job(&old, &job)?;
         assert_eq!(db.tasks()?.len(), 1);
         assert_eq!(db.jobs()?[0].next_run, Some(20));
+        assert!(db.delete_job(&job.id)?);
+        assert!(db.session(&format!("job:{}", job.id))?.is_none());
         Ok(())
     }
 }

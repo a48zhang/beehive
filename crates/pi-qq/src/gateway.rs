@@ -55,7 +55,6 @@ pub async fn run(state: Arc<State>) -> Result<()> {
             if error.downcast_ref::<Fatal>().is_some() {
                 return result;
             }
-            // ApiError contains only status/code, never a response body or URL.
             if let Some(api_error) = error.downcast_ref::<ApiError>() {
                 if matches!(
                     api_error,
@@ -68,8 +67,7 @@ pub async fn run(state: Arc<State>) -> Result<()> {
                 }
                 tracing::warn!(attempt, error = %api_error, "QQ API unavailable; reconnecting");
             } else {
-                // Arbitrary WS errors may contain the remote URL; don't log their detail.
-                tracing::warn!(attempt, "QQ connection ended; reconnecting");
+                tracing::warn!(attempt, error = %error, "QQ connection ended; reconnecting");
             }
         }
         if state.stop.is_cancelled() {
@@ -92,9 +90,10 @@ async fn connection(state: &State) -> Result<()> {
         .max_message_size(Some(1024 * 1024))
         .max_frame_size(Some(1024 * 1024));
     let mut request = gateway.into_client_request()?;
-    request
-        .headers_mut()
-        .insert("User-Agent", "PiQQ/0.2.0".parse()?);
+    request.headers_mut().insert(
+        "User-Agent",
+        concat!("PiQQ/", env!("CARGO_PKG_VERSION")).parse()?,
+    );
     let (mut socket, _) = tokio::time::timeout(
         Duration::from_secs(20),
         connect_async_with_config(request, Some(config), false),

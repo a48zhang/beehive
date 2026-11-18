@@ -177,10 +177,10 @@ impl Store {
         Ok(())
     }
     pub fn clear_session(&self) -> Result<()> {
-        self.0.lock().unwrap().execute(
-            "DELETE FROM metadata WHERE key IN ('session_id','seq','ws_session')",
-            [],
-        )?;
+        self.0
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM metadata WHERE key='ws_session'", [])?;
         Ok(())
     }
 }

@@ -221,7 +221,7 @@ async fn worker(state: Arc<State>) -> Result<()> {
 fn defer(delivery: &mut Delivery, error: impl ToString, permanent: bool) {
     delivery.attempts += 1;
     delivery.last_error = Some(error.to_string());
-    if permanent || delivery.attempts >= 5 {
+    if permanent || (delivery.phase != "submitted" && delivery.attempts >= 5) {
         delivery.phase = "dead".into();
     }
     delivery.next_attempt = Utc::now().timestamp() + (2_i64.pow(delivery.attempts.min(6))).min(60);
