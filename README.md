@@ -69,6 +69,8 @@ cargo run -p pi-qq -- status
 | Pi 运行时 | `pi-runtime.service` | `~/.local/share/pi-runtime/` | `127.0.0.1:8787`（REST 与 `POST /rpc`） |
 | QQ 通道 | `pi-qq.service` | `~/.local/share/pi-qq/` | `127.0.0.1:8788`（健康与状态查询） |
 
+systemd 模板不设置 `NoNewPrivileges`，Agent 子进程保留当前 Unix 用户正常的 sudo 能力。是否需要密码由系统现有 sudo 策略决定；Beehive 不自动修改 sudoers 或授予免密权限。
+
 首次初始化与部署请参考：
 - [Pi 运行时指南](docs/runtime.md)
 - [QQ 通道接入与运维指南](docs/qq-native.md)

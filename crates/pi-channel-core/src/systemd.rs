@@ -55,7 +55,7 @@ impl ServiceSpec<'_> {
             ensure!(!value.contains(['\n', '\r', '\0']), "Invalid unit field");
         }
         let mut unit = format!(
-            "# Managed by {} install-service\n[Unit]\nDescription={}\nAfter={}\nWants={}\n\n[Service]\nType=simple\nExecStart={} --home {} serve\nRestart=always\nRestartSec=5\nTimeoutStopSec={}\nKillMode=control-group\nUMask=0077\nNoNewPrivileges=true\n",
+            "# Managed by {} install-service\n[Unit]\nDescription={}\nAfter={}\nWants={}\n\n[Service]\nType=simple\nExecStart={} --home {} serve\nRestart=always\nRestartSec=5\nTimeoutStopSec={}\nKillMode=control-group\nUMask=0077\n",
             self.name,
             self.description,
             self.after.join(" "),
@@ -129,6 +129,10 @@ mod tests {
         assert!(unit.contains("After=pi-runtime.service\n"));
         assert!(unit.contains("\"/home/user/a b%%$$\""));
         assert!(!unit.contains("WorkingDirectory="));
+        assert!(
+            !unit.contains("NoNewPrivileges="),
+            "Agent subprocesses must retain the user’s normal sudo capability"
+        );
         assert!(unit.contains("Environment=\"RUST_LOG=info\""));
         assert!(
             spec.render(Path::new("relative"), Path::new("/tmp/home"))
