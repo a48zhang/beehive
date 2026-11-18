@@ -45,7 +45,7 @@ impl Api {
                 .connect_timeout(Duration::from_secs(10))
                 .timeout(Duration::from_secs(20))
                 .redirect(reqwest::redirect::Policy::none())
-                .user_agent("PiQQ/0.2.0")
+                .user_agent(concat!("PiQQ/", env!("CARGO_PKG_VERSION")))
                 .build()?,
             credentials,
             api_base,

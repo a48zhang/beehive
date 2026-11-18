@@ -1,10 +1,8 @@
 # pi-qq
 
-独立的 QQ Bot v2 通道服务。负责 token、WSS 会话、白名单、消息去重、持久化回发；只通过消息 JSON-RPC 调用运行时，不链接 `pi-runtime` 包。
+QQ Bot v2 通道守护进程，负责管理 Access Token、WSS 网关连接（Identify / Resume / 心跳）、OpenID 白名单过滤、收件箱去重与分片回发，通过本地 JSON-RPC 调用 `pi-runtime`。
 
-共享的客户端、消息结构、token 文件工具和 systemd 安装逻辑来自 `pi-channel-core`。
-
-从 workspace 根目录运行：
+常用命令（在 workspace 根目录执行）：
 
 ```bash
 cargo run -p pi-qq -- status
@@ -12,4 +10,4 @@ cargo build -p pi-qq --release --locked
 ./scripts/test.sh
 ```
 
-完整说明：[原生 QQ 指南](../../docs/qq-native.md)。
+详细配置与运维说明见 [docs/qq-native.md](../../docs/qq-native.md)。

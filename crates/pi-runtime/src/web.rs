@@ -14,7 +14,7 @@ use axum::{
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use subtle::ConstantTimeEq;
 
 pub struct ApiError(StatusCode, String);
@@ -93,23 +93,7 @@ async fn guard(WebState(state): WebState<Arc<State>>, request: Request, next: Ne
             )
             .into_response()
         } else {
-            let allowed = {
-                let mut rate = state.rate.lock().unwrap();
-                if rate.0.elapsed() >= Duration::from_secs(1) {
-                    *rate = (std::time::Instant::now(), 0);
-                }
-                rate.1 += 1;
-                rate.1 <= 30
-            };
-            if allowed {
-                next.run(request).await
-            } else {
-                ApiError(
-                    StatusCode::TOO_MANY_REQUESTS,
-                    "Rate limit: 30 requests/second".into(),
-                )
-                .into_response()
-            }
+            next.run(request).await
         }
     } else {
         next.run(request).await

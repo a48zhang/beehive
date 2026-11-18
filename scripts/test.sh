@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Build both process boundaries before running cross-package integration tests.
-#!/usr/bin/env bash
 set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"

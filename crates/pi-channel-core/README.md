@@ -1,15 +1,9 @@
 # pi-channel-core
 
-两个服务共用的边界层，保持依赖方向：
+`pi-runtime` 与 `pi-qq` 共用的协议与基础工具库：
 
-```text
-pi-runtime → pi-channel-core ← pi-qq
-```
-
-- `protocol`：wire DTO、方法名、协议版本、输入校验。
-- `message_client`：消息 RPC 客户端及限大小 JSON 响应读取。
-- `paths` / `secrets`：数据目录、最小端点发现、token 和私有文件。
-- `systemd`：服务传入自身策略，公共层渲染和安装 unit。
-- `id` / `init_logging`：统一事件 ID 与 JSON 日志初始化。
-
-不放入 QQ 连接、Pi 会话、任务调度或 SQLite 仓储；这些属于对应服务包。扩展其他通道时只需依赖本包的协议与客户端。
+- `protocol`：JSON-RPC 方法常量、`Submit` / `Task` / `TaskId` / `RuntimeStatus` 结构体与输入校验。
+- `message_client`：封装 Bearer Token 鉴权与 1 MiB 响应上限的 JSON-RPC 客户端。
+- `paths` / `secrets`：默认数据目录解析、运行时端口发现、Token 读取与 `0600` 私有文件创建。
+- `systemd`：用户级 systemd unit 渲染与安装。
+- `id` / `init_logging`：32 位十六进制随机 ID 生成与 JSON 结构化日志初始化。
