@@ -186,7 +186,6 @@ fn init(
         allowed_users: users,
         allowed_groups: vec![],
         poll_interval_ms: 1000,
-        reply_ttl_seconds: 240,
         hermes_home,
     };
     config.validate()?;

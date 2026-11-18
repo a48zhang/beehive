@@ -61,8 +61,7 @@ pub fn inbound(app: &str, event_type: &str, data: &Value, config: &Config) -> Op
         .and_then(|v| v.parse::<chrono::DateTime<chrono::FixedOffset>>().ok())
         .map(|d| d.timestamp())
         .or_else(|| data["timestamp"].as_i64())?;
-    let age = Utc::now().timestamp() - timestamp;
-    if age < -60 || age > config.reply_ttl_seconds {
+    if timestamp > Utc::now().timestamp() + 60 {
         return None;
     }
     let mut content = data["content"].as_str().unwrap_or("").trim();
@@ -132,7 +131,6 @@ mod tests {
             allowed_users: vec!["allowed".into()],
             allowed_groups: vec!["group1".into()],
             poll_interval_ms: 1000,
-            reply_ttl_seconds: 240,
             hermes_home: None,
         }
     }
@@ -142,6 +140,11 @@ mod tests {
         let mut data = serde_json::json!({"id":"msg", "content":"hello", "timestamp":Utc::now().to_rfc3339(),"author":{"user_openid":"allowed"}});
         let dm = inbound("123", "C2C_MESSAGE_CREATE", &data, &config).unwrap();
         assert!(dm.channel.len() <= 64);
+        data["timestamp"] = 1.into();
+        assert!(inbound("123", "C2C_MESSAGE_CREATE", &data, &config).is_some());
+        data["timestamp"] = (Utc::now().timestamp() + 3600).into();
+        assert!(inbound("123", "C2C_MESSAGE_CREATE", &data, &config).is_none());
+        data["timestamp"] = Utc::now().to_rfc3339().into();
         data["author"]["user_openid"] = "stranger".into();
         assert!(inbound("123", "C2C_MESSAGE_CREATE", &data, &config).is_none());
         data["author"]["member_openid"] = "allowed".into();

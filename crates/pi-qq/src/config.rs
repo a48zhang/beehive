@@ -19,7 +19,6 @@ pub struct Config {
     pub allowed_users: Vec<String>,
     pub allowed_groups: Vec<String>,
     pub poll_interval_ms: u64,
-    pub reply_ttl_seconds: i64,
     pub hermes_home: Option<PathBuf>,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -35,7 +34,13 @@ pub fn default_home() -> PathBuf {
 
 impl Config {
     pub fn load(home: &Path) -> Result<Self> {
-        let config: Self = serde_json::from_slice(&fs::read(home.join("config.json"))?)?;
+        let mut document: serde_json::Value =
+            serde_json::from_slice(&fs::read(home.join("config.json"))?)?;
+        // Accept old configs without retaining an expiry policy.
+        if let Some(object) = document.as_object_mut() {
+            object.remove("reply_ttl_seconds");
+        }
+        let config: Self = serde_json::from_value(document)?;
         config.validate()?;
         Ok(config)
     }
@@ -55,10 +60,6 @@ impl Config {
         ensure!(
             (500..=30000).contains(&self.poll_interval_ms),
             "poll_interval_ms must be 500..30000"
-        );
-        ensure!(
-            (60..=3600).contains(&self.reply_ttl_seconds),
-            "reply_ttl_seconds must be 60..3600"
         );
         ensure!(
             self.runtime_token_file.is_absolute() && self.credentials_file.is_absolute(),
@@ -191,7 +192,6 @@ mod tests {
             allowed_users: vec![],
             allowed_groups: vec![],
             poll_interval_ms: 1000,
-            reply_ttl_seconds: 240,
             hermes_home: None,
         };
         assert!(config.validate().is_ok());
@@ -224,7 +224,6 @@ mod tests {
             allowed_users: users,
             allowed_groups: vec![],
             poll_interval_ms: 1000,
-            reply_ttl_seconds: 240,
             hermes_home: Some(dir.path().to_path_buf()),
         };
         fs::write(

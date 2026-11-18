@@ -106,6 +106,46 @@ impl Store {
         }
         Ok(count)
     }
+    /// Compatibility recovery only: the current state machine never creates `dead`.
+    /// Keep task IDs, idempotency keys and confirmed chunk cursors intact.
+    pub fn resume_legacy_deliveries(&self) -> Result<usize> {
+        let mut db = self.0.lock().unwrap();
+        let tx = db.transaction()?;
+        let rows = tx
+            .prepare("SELECT payload FROM deliveries WHERE phase='dead'")?
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let count = rows.len();
+        for row in rows {
+            let mut delivery: Delivery = serde_json::from_str(&row)?;
+            delivery.phase = if !delivery.chunks.is_empty() {
+                if delivery.sent >= delivery.chunks.len() {
+                    "delivered"
+                } else {
+                    "reply"
+                }
+            } else if delivery.task_id.is_some() {
+                "submitted"
+            } else {
+                "pending"
+            }
+            .into();
+            delivery.attempts = 0;
+            delivery.next_attempt = Utc::now().timestamp();
+            delivery.last_error = None;
+            tx.execute(
+                "UPDATE deliveries SET phase=?,next_attempt=?,payload=? WHERE key=?",
+                params![
+                    delivery.phase,
+                    delivery.next_attempt,
+                    serde_json::to_string(&delivery)?,
+                    delivery.event.key
+                ],
+            )?;
+        }
+        tx.commit()?;
+        Ok(count)
+    }
     pub fn counts(&self) -> Result<BTreeMap<String, i64>> {
         let db = self.0.lock().unwrap();
         Ok(db
@@ -133,8 +173,8 @@ impl Store {
             })?;
         let mut delivery: Delivery = serde_json::from_str(&row)?;
         ensure!(
-            matches!(delivery.phase.as_str(), "uncertain" | "dead"),
-            "Only uncertain/dead events can be retried"
+            delivery.phase == "uncertain",
+            "Only uncertain events require manual retry; other failures retry automatically"
         );
         delivery.phase = if !delivery.chunks.is_empty() {
             "reply"

@@ -87,6 +87,13 @@ async fn serve_with_api(home: PathBuf, config: Config, api: Api) -> Result<()> {
     if recovered > 0 {
         tracing::warn!(recovered, "Interrupted QQ sends require manual review");
     }
+    let resumed = store.resume_legacy_deliveries()?;
+    if resumed > 0 {
+        tracing::info!(
+            resumed,
+            "Legacy stopped deliveries resumed; existing Pi tasks will not be replayed"
+        );
+    }
     let runtime = MessageClient::new(config.runtime_rpc_url.clone(), &config.runtime_token_file)?;
     let health_token = token(&home)?;
     let listener =
@@ -218,23 +225,13 @@ async fn worker(state: Arc<State>) -> Result<()> {
     Ok(())
 }
 
-fn defer(delivery: &mut Delivery, error: impl ToString, permanent: bool) {
-    delivery.attempts += 1;
+fn defer(delivery: &mut Delivery, error: impl ToString) {
+    delivery.attempts = delivery.attempts.saturating_add(1);
     delivery.last_error = Some(error.to_string());
-    if permanent || (delivery.phase != "submitted" && delivery.attempts >= 5) {
-        delivery.phase = "dead".into();
-    }
     delivery.next_attempt = Utc::now().timestamp() + (2_i64.pow(delivery.attempts.min(6))).min(60);
 }
 async fn process(state: &State, mut delivery: Delivery) -> Result<()> {
     let now = Utc::now().timestamp();
-    if now - delivery.event.timestamp > state.config.reply_ttl_seconds {
-        delivery.phase = "dead".into();
-        delivery.last_error =
-            Some("Reply TTL expired; the Pi task, if accepted, is NOT cancelled".into());
-        state.store.save(&delivery)?;
-        return Ok(());
-    }
     let poll_seconds = state.config.poll_interval_ms.div_ceil(1000) as i64;
     match delivery.phase.as_str() {
         "pending" => match state
@@ -254,7 +251,7 @@ async fn process(state: &State, mut delivery: Delivery) -> Result<()> {
             }
             Err(error) => {
                 state.status.lock().unwrap().runtime_ready = false;
-                defer(&mut delivery, &error, !error.retryable());
+                defer(&mut delivery, &error);
             }
         },
         "submitted" => {
@@ -283,7 +280,7 @@ async fn process(state: &State, mut delivery: Delivery) -> Result<()> {
                 }
                 Err(error) => {
                     state.status.lock().unwrap().runtime_ready = false;
-                    defer(&mut delivery, &error, !error.retryable());
+                    defer(&mut delivery, &error);
                 }
             }
         }
@@ -315,16 +312,19 @@ async fn process(state: &State, mut delivery: Delivery) -> Result<()> {
                 }
                 Err(error) => {
                     delivery.phase = "reply".into();
-                    let permanent = matches!(error, ApiError::Rejected { .. });
-                    defer(&mut delivery, error, permanent);
+                    defer(&mut delivery, error);
                 }
             }
         }
         _ => anyhow::bail!("Invalid delivery state"),
     }
-    if matches!(delivery.phase.as_str(), "dead" | "uncertain") {
+    if delivery.phase == "uncertain" {
         tracing::warn!(event_key=%delivery.event.key,phase=%delivery.phase,"QQ delivery needs operator review");
     }
     state.store.save(&delivery)?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "service_tests.rs"]
+mod tests;

@@ -186,7 +186,10 @@ impl Store {
         let db = self.0.lock().unwrap();
         let deleted = db.execute("DELETE FROM jobs WHERE id=?", [id])? > 0;
         if deleted {
-            db.execute("DELETE FROM sessions WHERE channel=?", [format!("job:{id}")])?;
+            db.execute(
+                "DELETE FROM sessions WHERE channel=?",
+                [format!("job:{id}")],
+            )?;
         }
         Ok(deleted)
     }
@@ -249,10 +252,7 @@ impl Store {
             "DELETE FROM sessions WHERE rowid IN (SELECT rowid FROM sessions ORDER BY rowid DESC LIMIT -1 OFFSET 255)",
             [],
         )?;
-        db.execute(
-            "INSERT INTO sessions VALUES(?,?)",
-            params![channel, path],
-        )?;
+        db.execute("INSERT INTO sessions VALUES(?,?)", params![channel, path])?;
         Ok(())
     }
 

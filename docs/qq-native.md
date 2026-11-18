@@ -66,7 +66,6 @@ service.lock       数据目录单实例锁
 | `allowed_users` | 允许访问的精确 `user_openid` / `member_openid` 列表（空列表拒绝所有请求） |
 | `allowed_groups` | 允许访问的精确 `group_openid` 列表（空列表禁用群聊响应） |
 | `poll_interval_ms` | 轮询收件箱与任务状态的间隔（毫秒），默认 `1000`（范围 `500..=30000`） |
-| `reply_ttl_seconds` | 消息回复有效期（秒），默认 `240`（范围 `60..=3600`），超时未回发则标为 `dead` |
 | `hermes_home` | 可选的 Hermes 目录路径，用于检测同 AppID 进程冲突 |
 
 ## 2. 注册服务与日常运维
@@ -95,11 +94,13 @@ journalctl --user -u pi-qq -f
 
 ```text
 pending → submitted → reply → sending → delivered
-                               ├→ uncertain（发送中途断连/5xx/进程退出）
-                               └→ dead（明确拒绝/超过 TTL/重试耗尽）
+                               └→ uncertain（发送中途断连/5xx/进程退出）
 ```
 
-- `pending` 阶段以事件唯一哈希作为幂等键调用 `message.submit`；进入 `submitted` 后持续轮询 `message.get` 直至任务完成或超过 `reply_ttl_seconds`。
+- `pending` 阶段以事件唯一哈希作为幂等键调用 `message.submit`；进入 `submitted` 后持续轮询 `message.get`，不因消息年龄或重试次数丢弃结果。
+- 不再有回复 TTL 或 `dead` 终态。RPC 故障、明确的 QQ 拒绝等保留原阶段，持续退避重试（最长间隔 60 秒），错误可通过 `pi-qq deliveries` 查看。
+- 旧配置中的 `reply_ttl_seconds` 会被忽略；启动时会恢复旧 `dead` 记录，保留已有 task_id、幂等键和已确认分片游标，不重新执行 Pi 任务。
+- 本地不再限制回复时限，但腾讯服务端仍可能拒绝旧 msg_id 或限制发送额度；这种拒绝会保留为待回发并记录错误，不代表本地能绕过平台限制。
 - 每次调用 QQ 发送接口前先将状态持久化为 `sending`，收到腾讯返回的成功消息 ID 后才累加已发送分片数 `sent`。
 - 若发送请求超时、返回 `5xx` 或服务在发送途中退出，状态会标记为 `uncertain` 并暂停自动重发；确认需要补发时可执行：
 

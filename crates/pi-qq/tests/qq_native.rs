@@ -249,7 +249,7 @@ async fn ws_loop(listener: TcpListener, mock: Arc<Mock>) -> Result<()> {
                 ("alice", "accepted", 4),
             ];
             for (user, id, seq) in events {
-                ws.send(Message::Text(json!({"op":0,"t":"C2C_MESSAGE_CREATE","s":seq,"d":{"id":id,"content":"hello","timestamp":Utc::now().to_rfc3339(),"author":{"user_openid":user}}}).to_string().into())).await?;
+                ws.send(Message::Text(json!({"op":0,"t":"C2C_MESSAGE_CREATE","s":seq,"d":{"id":id,"content":"hello","timestamp":(Utc::now()-chrono::Duration::minutes(30)).to_rfc3339(),"author":{"user_openid":user}}}).to_string().into())).await?;
             }
             ws.send(Message::Text(json!({"op":7,"d":null}).to_string().into()))
                 .await?;
@@ -351,7 +351,6 @@ async fn native_qq_end_to_end_reconnect_dedup_outbox_and_restart() -> Result<()>
         allowed_users: vec!["alice".into()],
         allowed_groups: vec!["g1".into()],
         poll_interval_ms: 500,
-        reply_ttl_seconds: 240,
         hermes_home: None,
     };
     private_write(&qq_home.join("config.json"), &serde_json::to_vec(&cfg)?)?;
